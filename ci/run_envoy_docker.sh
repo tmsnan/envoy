@@ -16,6 +16,15 @@ export HTTP_PROXY="${http_proxy:-}"
 export HTTPS_PROXY="${https_proxy:-}"
 export NO_PROXY="${no_proxy:-}"
 
+DOCKER_RUNNING_COMMAND=$*
+DOCKER_RUNNING_MODE="-it"
+
+if [[ ${DOCKER_RUNNING_COMMAND} == "" ]]; then
+    DOCKER_RUNNING_COMMAND="while true;do echo hello docker;sleep 5;done" # Run command forever and never stop.
+    DOCKER_RUNNING_MODE="-d"
+fi
+
+
 if is_windows; then
   [[ -z "${IMAGE_NAME}" ]] && IMAGE_NAME="envoyproxy/envoy-build-windows2019"
   # TODO(sunjayBhatia): Currently ENVOY_DOCKER_OPTIONS is ignored on Windows because
@@ -44,7 +53,7 @@ else
     && useradd -o --uid $(id -u) --gid $(id -g) --no-create-home --home-dir /build envoybuild \
     && usermod -a -G pcap envoybuild \
     && chown envoybuild:envoygroup /build \
-    && sudo -EHs -u envoybuild bash -c 'cd /source && $*'")
+    && sudo -EHs -u envoybuild bash -c 'cd /source && ${DOCKER_RUNNING_COMMAND}'")
 fi
 
 # The IMAGE_ID defaults to the CI hash but can be set to an arbitrary image ID (found with 'docker
@@ -63,8 +72,10 @@ export ENVOY_BUILD_IMAGE="${IMAGE_NAME}:${IMAGE_ID}"
 
 time docker pull "${ENVOY_BUILD_IMAGE}"
 
+CONTAINER_NAME=${USER}-"envoy-comm"-$(date +'%Y%m%d%H%M')
+
 # Since we specify an explicit hash, docker-run will pull from the remote repo if missing.
-docker run --rm \
+docker run --rm "${DOCKER_RUNNING_MODE}" --name ${CONTAINER_NAME} \
        "${ENVOY_DOCKER_OPTIONS[@]}" \
        -v "${ENVOY_DOCKER_BUILD_DIR}":"${BUILD_DIR_MOUNT_DEST}" \
        -v "${SOURCE_DIR}":"${SOURCE_DIR_MOUNT_DEST}" \
