@@ -9,6 +9,13 @@ function is_windows() {
   [[ "$(uname -s)" == *NT* ]]
 }
 
+DOCKER_RUNNING_COMMAND=$*
+DOCKER_RUNNING_MODE="-it"
+if [[ ${DOCKER_RUNNING_COMMAND} == "" ]]; then
+    DOCKER_RUNNING_COMMAND="while true;do echo hello docker;sleep 5;done" # Run command forever.
+    DOCKER_RUNNING_MODE="-d"
+fi
+
 read -ra ENVOY_DOCKER_OPTIONS <<< "${ENVOY_DOCKER_OPTIONS:-}"
 
 export HTTP_PROXY="${HTTP_PROXY:-${http_proxy:-}}"
@@ -36,7 +43,7 @@ else
   ENVOY_DOCKER_OPTIONS+=(-u root:root)
   DOCKER_USER_ARGS=()
   DOCKER_GROUP_ARGS=()
-  DEFAULT_ENVOY_DOCKER_BUILD_DIR=/tmp/envoy-docker-build
+  DEFAULT_ENVOY_DOCKER_BUILD_DIR="${HOME}/envoy_build/envoy_comm"
   USER_UID="$(id -u)"
   USER_GID="$(id -g)"
   if [[ -n "$ENVOY_DOCKER_IN_DOCKER" ]]; then
@@ -48,7 +55,7 @@ else
       DOCKER_GROUP_ARGS+=(--gid "${USER_GID}")
       DOCKER_USER_ARGS+=(--gid "${USER_GID}")
   fi
-  BUILD_DIR_MOUNT_DEST=/build
+  BUILD_DIR_MOUNT_DEST=/build/envoy-com
   SOURCE_DIR="${PWD}"
   SOURCE_DIR_MOUNT_DEST=/source
   START_COMMAND=(
@@ -59,7 +66,7 @@ else
           && usermod -a -G pcap envoybuild \
           && chown envoybuild:envoygroup /build \
           && chown envoybuild /proc/self/fd/2 \
-          && sudo -EHs -u envoybuild bash -c 'cd /source && $*'")
+          && sudo -EHs -u envoybuild bash -c 'cd /source && ${DOCKER_RUNNING_COMMAND}'")
 fi
 
 if [[ -n "$ENVOY_DOCKER_PLATFORM" ]]; then
@@ -111,8 +118,10 @@ if [[ -n "${ENVOY_DOCKER_PULL}" ]]; then
     time docker pull "${ENVOY_BUILD_IMAGE}"
 fi
 
+CONTAINER_NAME=${USER}-envoy-commin-$(date +'%Y%m%d%H%M')
+
 # Since we specify an explicit hash, docker-run will pull from the remote repo if missing.
-docker run --rm \
+docker run --rm "${DOCKER_RUNNING_MODE}" --name "${CONTAINER_NAME}"\
        "${ENVOY_DOCKER_OPTIONS[@]}" \
        "${VOLUMES[@]}" \
        -e BUILD_DIR \
